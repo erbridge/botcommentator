@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/ChimeraCoder/anaconda"
 	"github.com/erbridge/gotwit"
 	"github.com/erbridge/gotwit/callback"
 	"github.com/erbridge/gotwit/twitter"
+
+	"github.com/erbridge/botcommentator/connect4"
 )
 
 const (
@@ -18,11 +21,17 @@ const (
 )
 
 var (
+	boardRegexp = regexp.MustCompile("(?sm)\n\n(.*)\n1⃣")
+	pieceRegexp = regexp.MustCompile(fmt.Sprintf("%s|(%s)|(%s)", Blank, Sun, Moon))
+
 	sunWinRegexp  = regexp.MustCompile("Sun[[:space:]]*Wins!*[[:space:]]*$")
 	moonWinRegexp = regexp.MustCompile("Moon[[:space:]]*Wins!*[[:space:]]*$")
 
 	sunStartsRegexp  = regexp.MustCompile("Sun[[:space:]]*to[[:space:]]*Play[[:space:]]*$")
 	moonStartsRegexp = regexp.MustCompile("Moon[[:space:]]*to[[:space:]]*Play[[:space:]]*$")
+
+	sunTurnRegexp  = regexp.MustCompile("Sun's[[:space:]]*Turn[[:space:]]*$")
+	moonTurnRegexp = regexp.MustCompile("Moon's[[:space:]]*Turn[[:space:]]*$")
 )
 
 func createMassConnect4Callback(b *gotwit.Bot) func(anaconda.Tweet) {
@@ -41,14 +50,58 @@ func createMassConnect4Callback(b *gotwit.Bot) func(anaconda.Tweet) {
 			text += "Good morning, folks! Time for another gripping game of Mass Connect 4. Sun goes first this time."
 		} else if moonStartsRegexp.MatchString(t.Text) {
 			text += "Good evening, folks! Time for another gripping game of Mass Connect 4. Moon goes first this time."
+		} else if boardStrings := boardRegexp.FindStringSubmatch(t.Text); boardStrings != nil {
+			nextPiece := 0
+			nextTeam := ""
+			lastTeam := ""
+			if sunTurnRegexp.MatchString(t.Text) {
+				nextPiece = 1
+				nextTeam = "Sun"
+				lastTeam = "Moon"
+			} else if moonTurnRegexp.MatchString(t.Text) {
+				nextPiece = -1
+				nextTeam = "Moon"
+				lastTeam = "Sun"
+			}
+
+			weightedCount, count := countWins(boardStrings[1], nextPiece)
+
+			if prop := float32(nextPiece) * float32(weightedCount) / float32(count); prop > 0.9 {
+				text += fmt.Sprintf("Things are looking good for %s.", nextTeam)
+			} else if prop < -0.9 {
+				text += fmt.Sprintf("%s's pulling away. Can %s come back from this?", lastTeam, nextTeam)
+			}
 		} else {
 			return
 		}
 
-		text += " " + fmt.Sprintf("https://twitter.com/%s/status/%s", t.User.ScreenName, t.IdStr)
+		text += fmt.Sprintf(" https://twitter.com/%s/status/%s", t.User.ScreenName, t.IdStr)
 
 		b.Post(text, false)
 	}
+}
+
+func countWins(boardString string, piece int) (weightedCount, count int) {
+	board := connect4.NewBoard(6, 7)
+	rows := strings.Split(boardString, "\n")
+	for rowIdx := len(rows) - 1; rowIdx >= 0; rowIdx-- {
+		matches := pieceRegexp.FindAllStringSubmatch(rows[rowIdx], -1)
+
+		for colIdx, m := range matches {
+			piece := 0
+			if m[1] != "" {
+				piece = 1
+			} else if m[2] != "" {
+				piece = -1
+			} else {
+				continue
+			}
+
+			board.Play(piece, colIdx)
+		}
+	}
+
+	return board.CountWins(piece, 8)
 }
 
 func main() {
