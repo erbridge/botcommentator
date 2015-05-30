@@ -32,6 +32,8 @@ var (
 
 	sunTurnRegexp  = regexp.MustCompile("Sun's[[:space:]]*Turn[[:space:]]*$")
 	moonTurnRegexp = regexp.MustCompile("Moon's[[:space:]]*Turn[[:space:]]*$")
+
+	nullGameRegexp = regexp.MustCompile("Null[[:space:]]*Game[[:space:]]*$")
 )
 
 func createMassConnect4Callback(b *gotwit.Bot) func(anaconda.Tweet) {
@@ -46,6 +48,8 @@ func createMassConnect4Callback(b *gotwit.Bot) func(anaconda.Tweet) {
 			text += "Looks like the sun's shining today. A great game from two great teams."
 		} else if moonWinRegexp.MatchString(t.Text) {
 			text += "It's been a long night, but the moon's as bright as ever. Well played by both teams."
+		} else if nullGameRegexp.MatchString(t.Text) {
+			text += "They're calling the match off. Looks like they just couldn't take the pressure."
 		} else if sunStartsRegexp.MatchString(t.Text) {
 			text += "Good morning, folks! Time for another gripping game of Mass Connect 4. Sun goes first this time."
 		} else if moonStartsRegexp.MatchString(t.Text) {
