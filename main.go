@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/ChimeraCoder/anaconda"
@@ -23,6 +24,8 @@ const (
 var (
 	boardRegexp = regexp.MustCompile("(?sm)\n\n(.*)\n1⃣")
 	pieceRegexp = regexp.MustCompile(fmt.Sprintf("%s|(%s)|(%s)", Blank, Sun, Moon))
+
+	turnCountRegexp = regexp.MustCompile("^Move[[:space:]]*([[:digit:]]+):[[:space:]]*")
 
 	sunStartsRegexp  = regexp.MustCompile("Sun[[:space:]]*to[[:space:]]*Play[[:space:]]*$")
 	moonStartsRegexp = regexp.MustCompile("Moon[[:space:]]*to[[:space:]]*Play[[:space:]]*$")
@@ -55,25 +58,34 @@ func createMassConnect4Callback(b *gotwit.Bot) func(anaconda.Tweet) {
 		} else if nullGameRegexp.MatchString(t.Text) {
 			text += "They're calling the match off. Looks like they just couldn't take the pressure."
 		} else if boardStrings := boardRegexp.FindStringSubmatch(t.Text); boardStrings != nil {
-			nextPiece := 0
-			nextTeam := ""
-			lastTeam := ""
-			if sunTurnRegexp.MatchString(t.Text) {
-				nextPiece = 1
-				nextTeam = "Sun"
-				lastTeam = "Moon"
-			} else if moonTurnRegexp.MatchString(t.Text) {
-				nextPiece = -1
-				nextTeam = "Moon"
-				lastTeam = "Sun"
+			var turnCount uint64 = 0
+			if turnCountStrings := turnCountRegexp.FindStringSubmatch(t.Text); turnCountStrings != nil {
+				turnCount, _ = strconv.ParseUint(turnCountStrings[1], 10, 0)
 			}
 
-			weightedCount, count := countWins(boardStrings[1], nextPiece)
+			if turnCount == 1 {
+				text += "And we're off!"
+			} else if turnCount > 10 {
+				nextPiece := 0
+				nextTeam := ""
+				lastTeam := ""
+				if sunTurnRegexp.MatchString(t.Text) {
+					nextPiece = 1
+					nextTeam = "Sun"
+					lastTeam = "Moon"
+				} else if moonTurnRegexp.MatchString(t.Text) {
+					nextPiece = -1
+					nextTeam = "Moon"
+					lastTeam = "Sun"
+				}
 
-			if prop := float32(nextPiece) * float32(weightedCount) / float32(count); prop > 0.9 {
-				text += fmt.Sprintf("Things are looking good for %s.", nextTeam)
-			} else if prop < -0.9 {
-				text += fmt.Sprintf("%s's pulling away. Can %s come back from this?", lastTeam, nextTeam)
+				weightedCount, count := countWins(boardStrings[1], nextPiece)
+
+				if prop := float32(nextPiece) * float32(weightedCount) / float32(count); prop > 0.9 {
+					text += fmt.Sprintf("Things are looking good for %s.", nextTeam)
+				} else if prop < -0.9 {
+					text += fmt.Sprintf("%s's pulling away. Can %s come back from this?", lastTeam, nextTeam)
+				}
 			}
 		}
 
