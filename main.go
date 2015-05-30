@@ -71,7 +71,9 @@ func createMassConnect4Callback(b *gotwit.Bot) func(anaconda.Tweet) {
 			} else if prop < -0.9 {
 				text += fmt.Sprintf("%s's pulling away. Can %s come back from this?", lastTeam, nextTeam)
 			}
-		} else {
+		}
+
+		if text == "" {
 			return
 		}
 
